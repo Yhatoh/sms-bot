@@ -1,10 +1,7 @@
 require("dotenv").config()
 
 const {Client, Intents, ClientPresence, InviteGuild} = require("discord.js")
-const {DiscordEventManager} = require('discord-events')
 const Airtable = require('airtable')
-
-const event = new DiscordEventManager(process.env.BOT_LOGIN, process.env.BOT_ID)
 
 const client = 
   new Client({
@@ -20,11 +17,12 @@ const client =
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-let SC_VOICE = "819416225360379949" // sunshine community voice chat
-let BINGO_VOICE = "819416225360379949" // bingothon voice chat
-let OFFLINE_VOICE = "819416225360379949" // offline voice chat
+let SC_VOICE = ""// sunshine community voice chat
+let BINGO_VOICE = "" // bingothon voice chat
+let OFFLINE_VOICE = "" // offline voice chat
+let NAME_DB = 'Season 4 Matches' // name of the db
 
-const PING_TIMER = 3600 * 1000 * 5
+const PING_TIMER = 3600 * 1000;
 
 let created_matches = new Set()
 let GUILD_INSTANCE = ""
@@ -41,7 +39,7 @@ const voiceId = (restream_channel) => {
 const getAllMatches = async () => {
   const base = Airtable.base(process.env.AIRTABLE_BASE_ID)
   const matches = []
-  await base('Season 4 Matches')
+  await base(NAME_DB)
         .select({filterByFormula:
           '{Status} = "Scheduled"',
         }).eachPage((records, fetchNextPage) => {
@@ -69,26 +67,18 @@ const createEvents = async (matches) => {
 
     created_matches.add(match["Match ID"])
 
-    let lets_try = true;
+    console.log("Trying to create a new event");
 
-    while(lets_try) {
-      try {
-        console.log("Trying to create a new event");
-        const Stage_Event = await event.createEvent(GUILD_INSTANCE.id, {
-          entity_type: 2, //voice
-          channel_id: voiceId(match['Restream Channel']), //a voice id
-          name: match["Match ID"], //Event Name
-          scheduled_start_time: match["Match Time (EST)"], //ISO 8601 time format
-          description: `${match["Match ID"]} ${match['Match Format']} in ${match['Restream Channel']}`
-        });
-        
-        lets_try = false;
-        await sleep(10 * 1000)
-      } catch(error) {
-        console.log("Rate limit error - waiting 20 seconds");
-        await sleep(20 * 1000)
-      } 
-    }
+    const updated_event = await GUILD_INSTANCE
+      .scheduledEvents
+      .create({
+        entityType: 2,
+        privacyLevel: 2,              
+        name: match["Match ID"],
+        channel: voiceId(match['Restream Channel']),
+        scheduledStartTime: match["Match Time (EST)"], 
+        description: `${match["Match ID"]} ${match['Match Format']} in ${match['Restream Channel']}`,
+      });
   }
 }
 
@@ -104,7 +94,6 @@ const updateEvents = async () => {
   }
 
   for(let match of matches) {
-    //console.log(pair_match_event.has(String(match["Match ID"])))
     if (pair_match_event.has(match["Match ID"])) {
       console.log("Updating event")
       console.log(`> ${match["Match ID"]} <`);
@@ -119,24 +108,22 @@ const updateEvents = async () => {
             });
       console.log(updated_event)
     }
-
-  }
-  
+  } 
 }
 
-/*
-setInterval( async () => {
-  const matches = await getAllMatches();
-  createEvents(matches);
-}, PING_TIMER)
-*/
+let update_check = false;
 
-/*
 setInterval( async () => {
   const matches = await getAllMatches();
-  createEvents(matches);
-}, PING_TIMER * 2)
-*/
+
+  if (update_check)
+    updateEvents(matches);
+  else
+    createEvents(matches);
+
+  update_check = !update_check;
+}, PING_TIMER)
+
 
 client.on("ready",  async () => {
   
@@ -149,26 +136,32 @@ client.on("ready",  async () => {
 
   const all_events = await GUILD_INSTANCE.scheduledEvents.fetch();
 
-  for (const event of all_events) {
+  for (const event of all_events)
     created_matches.add(event[1].name);
-  }
-})
 
-client.on("messageCreate", async (msg) => {
-  //if(msg.author.bot){
-  //  return
-  //}
-  
+  const all_channels = await GUILD_INSTANCE.channels.fetch();
 
-  //client.channels.cache.get("882016606383906816").send("Soy el arias y...")
+  all_channels.map( (channel) => {
+    const type_channel = channel.type;
+    if(type_channel !== "GUILD_VOICE")
+      return;
 
-  const base = Airtable.base(process.env.AIRTABLE_BASE_ID)
-  const matches = await getAllMatches();
-  if(msg.content === "loool") {
-    await createEvents(matches)
-  } else if(msg.content === "loool u"){
-    await updateEvents()
-  }
-})
+    const channel_name = channel.name;
+    
+    switch(channel_name) {
+      case "Commentators SC":
+        SC_VOICE = channel.id;
+        break;
+
+      case "Commentators Bingothon":
+        BINGO_VOICE = channel.id;
+        break;
+
+      case "Scrimmage #1":
+        OFFLINE_VOICE = channel.id;
+        break;
+    }
+  });
+});
 
 client.login(process.env.BOT_LOGIN)
