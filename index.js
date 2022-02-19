@@ -17,17 +17,17 @@ const client =
 
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms))
 
-let SC_VOICE = ""// sunshine community voice chat
-let BINGO_VOICE = "" // bingothon voice chat
-let OFFLINE_VOICE = "" // offline voice chat
+let SC_VOICE = "https://www.twitch.tv/sunshinecommunity"// sunshine twitch
+let BINGO_VOICE = "https://www.twitch.tv/bingothon" // bingothon twitch
+let OFFLINE_VOICE = "Offline" // offline voice chat
 let NAME_DB = 'Season 4 Matches' // name of the db
 
-const PING_TIMER = 3600 * 1000;
+const PING_TIMER = 5 * 1000;
 
 let created_matches = new Set()
 let GUILD_INSTANCE = ""
 
-const voiceId = (restream_channel) => {
+const twitchLink = (restream_channel) => {
   if(restream_channel === "SunshineCommunity") {
     return SC_VOICE
   } else if(restream_channel === "Bingothon") {
@@ -69,14 +69,18 @@ const createEvents = async (matches) => {
 
     console.log("Trying to create a new event");
 
+    const starting_time = new Date(match["Match Time (EST)"]);
+    const end_time = new Date(starting_time.getTime() + 90 * 60000);
+
     const updated_event = await GUILD_INSTANCE
       .scheduledEvents
       .create({
-        entityType: 2,
+        entityType: 3,
         privacyLevel: 2,              
         name: match["Match ID"],
-        channel: voiceId(match['Restream Channel']),
-        scheduledStartTime: match["Match Time (EST)"], 
+        scheduledStartTime: starting_time.toString(), 
+        scheduledEndTime: end_time.toString(), 
+        entityMetadata: {location: twitchLink(match['Restream Channel'])},
         description: `${match["Match ID"]} ${match['Match Format']} in ${match['Restream Channel']}`,
       });
   }
@@ -97,16 +101,20 @@ const updateEvents = async () => {
     if (pair_match_event.has(match["Match ID"])) {
       console.log("Updating event")
       console.log(`> ${match["Match ID"]} <`);
+
+      const starting_time = new Date(match["Match Time (EST)"]);
+      const end_time = new Date(starting_time.getTime() + 90 * 60000);
+
       const updated_event = await GUILD_INSTANCE
             .scheduledEvents
             .edit(pair_match_event.get(match["Match ID"]),
               {
-              entityType: 2,
-              channel: voiceId(match['Restream Channel']),
+              entityType: 3,
               scheduledStartTime: match["Match Time (EST)"], 
+              scheduledEndTime: end_time.toString(), 
+              entityMetadata: {location: twitchLink(match['Restream Channel'])},
               description: `${match["Match ID"]} ${match['Match Format']} in ${match['Restream Channel']}`,
             });
-      console.log(updated_event)
     }
   } 
 }
@@ -141,27 +149,7 @@ client.on("ready",  async () => {
 
   const all_channels = await GUILD_INSTANCE.channels.fetch();
 
-  all_channels.map( (channel) => {
-    const type_channel = channel.type;
-    if(type_channel !== "GUILD_VOICE")
-      return;
 
-    const channel_name = channel.name;
-    
-    switch(channel_name) {
-      case "Commentators SC":
-        SC_VOICE = channel.id;
-        break;
-
-      case "Commentators Bingothon":
-        BINGO_VOICE = channel.id;
-        break;
-
-      case "Scrimmage #1":
-        OFFLINE_VOICE = channel.id;
-        break;
-    }
-  });
 });
 
 client.login(process.env.BOT_LOGIN)

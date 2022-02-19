@@ -6,6 +6,6 @@ This bot will create and update events each hour depending on the database's dat
 
 There is one important variable called `NAME_DB`, which contains the name of the database (in case there is another season, just change it). Future work: make this variable updateable from discord.
 
-Also, this bot assumes voice chats in the server will not change in the next years :) .
+Also, this bot assumes the Twitch accounts that streams the matches will not change in the next years :) .
 
 To start the bot, just run `npm run start`.
